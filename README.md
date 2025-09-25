@@ -19,6 +19,8 @@ pdf_knowledge_base/
 
     └── index.html         # Web界面模板
 
+    
+
 
 ## 功能特性
 
@@ -77,4 +79,5 @@ pdf_knowledge_base/
 - 处理大量PDF时请耐心等待
 
 - 确保系统有足够的内存和存储空间
+
 
