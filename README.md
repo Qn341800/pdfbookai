@@ -5,12 +5,18 @@
 ## 项目结构
 pdf_knowledge_base/
 
--├── app.py                 # Flask主应用
--├── knowledge_base.py      # 知识库核心功能
--├── requirements.txt       # 依赖包列表
--├── run.bat               # Windows启动脚本
--├── README.md             # 使用说明
--└── templates/
+├── app.py                 # Flask主应用
+
+├── knowledge_base.py      # 知识库核心功能
+
+├── requirements.txt       # 依赖包列表
+
+├── run.bat               # Windows启动脚本
+
+├── README.md             # 使用说明
+
+└── templates/
+
     └── index.html         # Web界面模板
 
 
@@ -71,3 +77,4 @@ pdf_knowledge_base/
 - 处理大量PDF时请耐心等待
 
 - 确保系统有足够的内存和存储空间
+
