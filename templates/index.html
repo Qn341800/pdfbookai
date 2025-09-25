@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF知识库系统</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .result-card {
+            transition: transform 0.2s;
+        }
+        .result-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+        }
+        .source-badge {
+            cursor: pointer;
+        }
+        #uploadArea {
+            border: 2px dashed #ccc;
+            padding: 20px;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container py-4">
+        <h1 class="text-center mb-4">个人PDF知识库系统</h1>
+        
+        <!-- 上传区域 -->
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white">
+                <h5>PDF文件管理</h5>
+            </div>
+            <div class="card-body">
+                <div id="uploadArea" class="mb-3">
+                    <p>拖放PDF文件到此处或点击选择文件</p>
+                    <input type="file" id="fileInput" class="d-none" accept=".pdf">
+                    <button class="btn btn-outline-primary" onclick="document.getElementById('fileInput').click()">
+                        选择PDF文件
+                    </button>
+                    <button class="btn btn-success ms-2" id="batchImportBtn">
+                        批量导入PDF
+                    </button>
+                </div>
+                <div id="uploadStatus"></div>
+            </div>
+        </div>
+        
+        <!-- 搜索区域 -->
+        <div class="card mb-4">
+            <div class="card-header bg-info text-white">
+                <h5>知识查询</h5>
+            </div>
+            <div class="card-body">
+                <div class="input-group mb-3">
+                    <input type="text" id="searchInput" class="form-control" placeholder="输入您的问题...">
+                    <button class="btn btn-primary" type="button" id="searchBtn">搜索</button>
+                </div>
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="llmModeSwitch">
+                    <label class="form-check-label" for="llmModeSwitch">启用智能问答（需要本地LLM支持）</label>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 结果展示区域 -->
+        <div class="card">
+            <div class="card-header bg-success text-white">
+                <h5>查询结果</h5>
+            </div>
+            <div class="card-body">
+                <div id="resultsContainer">
+                    <div class="text-center py-5">
+                        <p class="text-muted">输入查询内容以获取结果</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 文件上传处理
+        document.getElementById('fileInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                uploadFile(file);
+            }
+        });
+
+        // 拖放功能
+        const uploadArea = document.getElementById('uploadArea');
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.style.borderColor = '#0d6efd';
+        });
+        
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.style.borderColor = '#ccc';
+        });
+        
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.style.borderColor = '#ccc';
+            
+            const files = e.dataTransfer.files;
+            if (files.length > 0 && files[0].name.toLowerCase().endsWith('.pdf')) {
+                uploadFile(files[0]);
+            }
+        });
+
+        // 批量导入按钮
+        document.getElementById('batchImportBtn').addEventListener('click', batchImport);
+
+        // 搜索按钮
+        document.getElementById('searchBtn').addEventListener('click', performSearch);
+        document.getElementById('searchInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') performSearch();
+        });
+
+        // 文件上传函数
+        function uploadFile(file) {
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            fetch('/upload', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    showMessage(`上传失败: ${data.error}`, 'danger');
+                } else {
+                    showMessage(data.message, 'success');
+                }
+            })
+            .catch(error => {
+                showMessage(`上传错误: ${error}`, 'danger');
+            });
+        }
+
+        // 批量导入函数
+        function batchImport() {
+            fetch('/batch_import', {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                let resultHtml = '<div class="alert alert-info">批量导入结果：</div><ul>';
+                data.results.forEach(msg => {
+                    resultHtml += `<li>${msg}</li>`;
+                });
+                resultHtml += '</ul>';
+                document.getElementById('uploadStatus').innerHTML = resultHtml;
+            });
+        }
+
+        // 执行搜索
+        function performSearch() {
+            const query = document.getElementById('searchInput').value.trim();
+            if (!query) return;
+            
+            const useLLM = document.getElementById('llmModeSwitch').checked;
+            
+            fetch('/search', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    query: query,
+                    mode: useLLM ? 'llm' : 'vector'
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                displayResults(data, useLLM);
+            });
+        }
+
+        // 显示结果
+        function displayResults(data, isLLM) {
+            const container = document.getElementById('resultsContainer');
+            
+            if (isLLM) {
+                // 智能问答模式结果
+                let html = `
+                    <div class="card mb-3">
+                        <div class="card-header bg-warning">
+                            智能回答
+                        </div>
+                        <div class="card-body">
+                            <p class="card-text">${data.answer}</p>
+                        </div>
+                    </div>
+                    <h5>来源文档：</h5>
+                `;
+                
+                data.sources.forEach((source, index) => {
+                    html += `
+                    <div class="card mb-2 result-card">
+                        <div class="card-body">
+                            <h6 class="card-title">
+                                <span class="badge bg-primary">来源 ${index+1}</span>
+                                ${source.source} - 页码 ${source.page}
+                            </h6>
+                        </div>
+                    </div>
+                    `;
+                });
+                
+                container.innerHTML = html;
+            } else {
+                // 向量搜索模式结果
+                if (!data.results || data.results.length === 0) {
+                    container.innerHTML = '<div class="alert alert-warning">未找到相关结果</div>';
+                    return;
+                }
+                
+                let html = `<h5>找到 ${data.results.length} 个相关片段：</h5>`;
+                
+                data.results.forEach(result => {
+                    html += `
+                    <div class="card mb-3 result-card">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <h5 class="card-title mb-0">
+                                    <span class="badge bg-primary source-badge">${result.rank}</span>
+                                </h5>
+                                <div>
+                                    <span class="badge bg-info">${result.source}</span>
+                                    <span class="badge bg-secondary">页码 ${result.page}</span>
+                                </div>
+                            </div>
+                            <p class="card-text">${result.content}</p>
+                        </div>
+                    </div>
+                    `;
+                });
+                
+                container.innerHTML = html;
+            }
+        }
+
+        // 显示消息
+        function showMessage(message, type) {
+            const statusDiv = document.getElementById('uploadStatus');
+            statusDiv.innerHTML = `<div class="alert alert-${type}">${message}</div>`;
+            setTimeout(() => {
+                statusDiv.innerHTML = '';
+            }, 5000);
+        }
+    </script>
+</body>
+</html>
